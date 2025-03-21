@@ -19,6 +19,39 @@ ORDER BY total_exec_time DESC;
 # CSV file to store training data
 csv_filename = "training_data.csv"
 
+# Expected header
+expected_header = [
+    "query", "calls", "total_exec_time", "mean_exec_time", 
+    "shared_blks_hit", "shared_blks_read", 
+    "temp_blks_read", "temp_blks_written", "log_time"
+]
+
+def check_and_correct_header():
+    """
+    Check if the CSV file exists and if its header matches the expected header.
+    If not, rewrite the file with the correct header, preserving the old data.
+    """
+    try:
+        with open(csv_filename, 'r', newline='') as csvfile:
+            reader = csv.reader(csvfile)
+            existing_header = next(reader, None)
+            # If header is missing or does not match, rewrite file with correct header
+            if existing_header != expected_header:
+                print("Header is incorrect or missing. Rewriting file with correct header.")
+                # Read all existing data (skip header if it exists)
+                data = list(reader)
+                # Open file in write mode and write correct header, then old data
+                with open(csv_filename, 'w', newline='') as outfile:
+                    writer = csv.writer(outfile)
+                    writer.writerow(expected_header)
+                    for row in data:
+                        writer.writerow(row)
+            else:
+                print("CSV header is correct.")
+    except FileNotFoundError:
+        # File doesn't exist; nothing to check
+        print("CSV file does not exist yet.")
+
 def collect_data():
     try:
         conn = psycopg2.connect(**db_config)
@@ -34,21 +67,12 @@ def collect_data():
         return []
 
 def write_to_csv(rows):
-    # Check if CSV file already exists; if not, we'll write a header
-    try:
-        with open(csv_filename, 'r', newline='') as csvfile:
-            file_exists = True
-    except FileNotFoundError:
-        file_exists = False
-
+    # First, check and correct header if necessary
+    check_and_correct_header()
+    
+    # Open the CSV file in append mode
     with open(csv_filename, 'a', newline='') as csvfile:
         writer = csv.writer(csvfile)
-        if not file_exists:
-            writer.writerow([
-                "query", "calls", "total_exec_time", "mean_exec_time", 
-                "shared_blks_hit", "shared_blks_read", 
-                "temp_blks_read", "temp_blks_written", "log_time"
-            ])
         log_time = datetime.now().isoformat()
         for row in rows:
             writer.writerow(list(row) + [log_time])
