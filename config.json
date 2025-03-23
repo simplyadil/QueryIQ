@@ -1,7 +1,7 @@
 {
-    "dbname": "lego",
+    "dbname": "Your_db_name",
     "user": "postgres",
-    "password": "Dbsop100",
+    "password": "Your_pw",
     "host": "localhost",
     "port": 5432
 } 
