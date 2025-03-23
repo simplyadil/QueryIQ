@@ -8,18 +8,19 @@ from src.optimization.query_interceptor import QueryInterceptor
 from src.visualization.powerbi_connector import PowerBIConnector
 
 class QueryIQ:
-    def __init__(self, config_path='config.json'):
+    def __init__(self, config_path='config.json', performance_threshold=0.3):
         # Load configuration
         with open(config_path, 'r') as f:
             self.config = json.load(f)
         
         # Initialize components
         self.collector = QueryCollector(config_path)
-        self.interceptor = QueryInterceptor(config_path)
+        self.interceptor = QueryInterceptor(config_path, performance_threshold=performance_threshold)
         self.visualizer = PowerBIConnector()
         
         # Create necessary directories
         Path('data/processed').mkdir(parents=True, exist_ok=True)
+        Path('data/models').mkdir(parents=True, exist_ok=True)
         Path('logs').mkdir(parents=True, exist_ok=True)
     
     def start_monitoring(self, interval=300):  # 5 minutes default
@@ -66,7 +67,8 @@ class QueryIQ:
                 'query': query,
                 'predicted_time': result['predicted_time'],
                 'actual_time': result['actual_time'],
-                'suggestions': result['suggestions']
+                'suggestions': result['suggestions'],
+                'using_model': result['using_model']
             }
             
             self._log_analysis(log_entry)
@@ -75,6 +77,27 @@ class QueryIQ:
             
         except Exception as e:
             print(f"Error analyzing query: {e}")
+            raise
+    
+    def train_model(self, data_path='data/processed/processed_data.parquet'):
+        """Train the query execution time prediction model."""
+        try:
+            metrics = self.interceptor.train_model(data_path)
+            
+            # Log model training results
+            timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            log_entry = {
+                'timestamp': timestamp,
+                'event': 'model_training',
+                'metrics': metrics
+            }
+            
+            self._log_analysis(log_entry)
+            
+            return metrics
+            
+        except Exception as e:
+            print(f"Error training model: {e}")
             raise
     
     def _log_analysis(self, log_entry):
@@ -119,6 +142,7 @@ def main():
         result = queryiq.analyze_query(test_query)
         print(f"Predicted time: {result['predicted_time']:.2f}ms")
         print(f"Actual time: {result['actual_time']:.2f}ms")
+        print(f"Using model: {result['using_model']}")
         print("Suggestions:")
         for suggestion in result['suggestions']:
             print(f"- {suggestion}")

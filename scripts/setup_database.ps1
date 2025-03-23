@@ -16,6 +16,9 @@ $env:PGPASSWORD = $config.password
 
 Write-Host "🚀 Starting PostgreSQL Optimization Setup for $($config.dbname) DB..."
 
+# Create database if it doesn't exist
+& $psqlCommand -U $config.user -h $config.host -d "postgres" -c "CREATE DATABASE $($config.dbname);"
+
 # Create pg_stat_statements extension
 & $psqlCommand -U $config.user -d $config.dbname -h $config.host -c "CREATE EXTENSION IF NOT EXISTS pg_stat_statements;"
 

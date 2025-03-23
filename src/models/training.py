@@ -41,17 +41,20 @@ def train_model(data_path, output_dir):
         'r2': r2_score(y_test, y_pred)
     }
     
-    # Save model and scaler
+    # Save model, scaler, and metrics
     Path(output_dir).mkdir(parents=True, exist_ok=True)
     joblib.dump(model, f"{output_dir}/random_forest_model.joblib")
     joblib.dump(scaler, f"{output_dir}/scaler.joblib")
+    joblib.dump(metrics, f"{output_dir}/model_metrics.joblib")
+    
+    print("\nModel Training Results:")
+    print(f"R² Score: {metrics['r2']:.4f}")
+    print(f"RMSE: {metrics['rmse']:.4f}")
+    print(f"MSE: {metrics['mse']:.4f}")
     
     return metrics
 
 if __name__ == "__main__":
     data_path = "data/processed/processed_data.parquet"
     output_dir = "data/models"
-    metrics = train_model(data_path, output_dir)
-    print("Model Training Results:")
-    for metric, value in metrics.items():
-        print(f"{metric.upper()}: {value:.4f}") 
+    metrics = train_model(data_path, output_dir) 

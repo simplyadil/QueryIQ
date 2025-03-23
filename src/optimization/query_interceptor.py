@@ -7,14 +7,14 @@ from .optimizer import QueryOptimizer
 from ..data.query_collector import QueryCollector
 
 class QueryInterceptor:
-    def __init__(self, config_path='config.json'):
+    def __init__(self, config_path='config.json', performance_threshold=0.3):
         # Load database configuration
-        with open(config_path, 'r') as f:
+        with open(config_path, 'r', encoding='utf-8') as f:
             self.config = json.load(f)
         
         # Initialize components
         self.collector = QueryCollector(config_path)
-        self.optimizer = QueryOptimizer()
+        self.optimizer = QueryOptimizer(performance_threshold=performance_threshold)
         
         # Initialize connection
         self.conn = None
@@ -45,14 +45,18 @@ class QueryInterceptor:
             self.collector.log_query_performance(
                 query=query,
                 execution_time=predicted_time,
-                resource_usage={}  # Will be updated after actual execution
+                resource_usage={
+                    'predicted_time': predicted_time,
+                    'features': features
+                }
             )
             
             return {
                 'query': query,
                 'predicted_time': predicted_time,
                 'suggestions': suggestions,
-                'timestamp': datetime.now().isoformat()
+                'timestamp': datetime.now().isoformat(),
+                'using_model': self.optimizer.has_model and self.optimizer.model_performance >= self.optimizer.performance_threshold
             }
             
         except Exception as e:
@@ -76,7 +80,10 @@ class QueryInterceptor:
             self.collector.log_query_performance(
                 query=query,
                 execution_time=execution_time,
-                resource_usage={'actual_time': execution_time}
+                resource_usage={
+                    'actual_time': execution_time,
+                    'predicted_time': analysis['predicted_time']
+                }
             )
             
             return {
@@ -87,6 +94,16 @@ class QueryInterceptor:
             
         except Exception as e:
             print(f"Error executing query: {e}")
+            raise
+    
+    def train_model(self, data_path='data/processed/processed_data.parquet'):
+        """Train the query execution time prediction model."""
+        try:
+            metrics = train_model(data_path, 'data/models')
+            print(f"\nModel trained successfully with R² score: {metrics['r2']:.4f}")
+            return metrics
+        except Exception as e:
+            print(f"Error training model: {e}")
             raise
     
     def close(self):
@@ -110,6 +127,7 @@ def main():
             result = interceptor.execute_query(query)
             print(f"Predicted time: {result['predicted_time']:.2f}ms")
             print(f"Actual time: {result['actual_time']:.2f}ms")
+            print(f"Using model: {result['using_model']}")
             print("Suggestions:")
             for suggestion in result['suggestions']:
                 print(f"- {suggestion}")

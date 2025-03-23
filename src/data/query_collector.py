@@ -8,7 +8,7 @@ from src.features.extraction import extract_features
 class QueryCollector:
     def __init__(self, config_path='config.json'):
         # Load database configuration
-        with open(config_path, 'r') as f:
+        with open(config_path, 'r', encoding='utf-8') as f:
             self.config = json.load(f)
         
         # Create processed data directory if it doesn't exist
