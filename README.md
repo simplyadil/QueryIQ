@@ -27,7 +27,7 @@ pip install -r requirements.txt
 Create a `config.json` file in the project root:
 ```json
 {
-    "dbname": "lego",
+    "dbname": "your_db_name",
     "user": "postgres",
     "password": "your_password",
     "host": "localhost",
