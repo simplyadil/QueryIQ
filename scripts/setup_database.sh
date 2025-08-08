@@ -1,29 +1,41 @@
+#!/bin/bash
+
 # Load configuration
-$configPath = "config.json"
-if (-not (Test-Path $configPath)) {
-    Write-Error "Configuration file not found: $configPath"
+CONFIG_PATH="config.json"
+if [ ! -f "$CONFIG_PATH" ]; then
+    echo "Error: Configuration file not found: $CONFIG_PATH"
     exit 1
-}
+fi
 
-$config = Get-Content $configPath | ConvertFrom-Json
-
-# Set PostgreSQL paths
-$PG_VERSION = "17"
-$psqlCommand = "C:\Program Files\PostgreSQL\$PG_VERSION\bin\psql.exe"
+# Extract database configuration using jq (if available) or simple parsing
+if command -v jq &> /dev/null; then
+    DBNAME=$(jq -r '.dbname' "$CONFIG_PATH")
+    USER=$(jq -r '.user' "$CONFIG_PATH")
+    PASSWORD=$(jq -r '.password' "$CONFIG_PATH")
+    HOST=$(jq -r '.host' "$CONFIG_PATH")
+    PORT=$(jq -r '.port' "$CONFIG_PATH")
+else
+    # Simple parsing without jq
+    DBNAME=$(grep -o '"dbname": *"[^"]*"' "$CONFIG_PATH" | cut -d'"' -f4)
+    USER=$(grep -o '"user": *"[^"]*"' "$CONFIG_PATH" | cut -d'"' -f4)
+    PASSWORD=$(grep -o '"password": *"[^"]*"' "$CONFIG_PATH" | cut -d'"' -f4)
+    HOST=$(grep -o '"host": *"[^"]*"' "$CONFIG_PATH" | cut -d'"' -f4)
+    PORT=$(grep -o '"port": *[0-9]*' "$CONFIG_PATH" | cut -d':' -f2 | tr -d ' ')
+fi
 
 # Set password for psql
-$env:PGPASSWORD = $config.password
+export PGPASSWORD="$PASSWORD"
 
-Write-Host "🚀 Starting PostgreSQL Optimization Setup for $($config.dbname) DB..."
+echo "🚀 Starting PostgreSQL Optimization Setup for $DBNAME DB..."
 
 # Create database if it doesn't exist
-& $psqlCommand -U $config.user -h $config.host -d "postgres" -c "CREATE DATABASE $($config.dbname);"
+psql -U "$USER" -h "$HOST" -d "postgres" -c "CREATE DATABASE $DBNAME;" 2>/dev/null || echo "Database already exists or creation failed"
 
 # Create pg_stat_statements extension
-& $psqlCommand -U $config.user -d $config.dbname -h $config.host -c "CREATE EXTENSION IF NOT EXISTS pg_stat_statements;"
+psql -U "$USER" -d "$DBNAME" -h "$HOST" -c "CREATE EXTENSION IF NOT EXISTS pg_stat_statements;"
 
 # Create query_performance_log table
-$createTableQuery = @"
+psql -U "$USER" -d "$DBNAME" -h "$HOST" << 'EOF'
 CREATE TABLE IF NOT EXISTS query_performance_log (
     id SERIAL PRIMARY KEY,
     timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -46,12 +58,10 @@ CREATE TABLE IF NOT EXISTS query_performance_log (
     num_limit INTEGER,
     query_complexity INTEGER
 );
-"@
-
-& $psqlCommand -U $config.user -d $config.dbname -h $config.host -c $createTableQuery
+EOF
 
 # Create sample tables for testing
-$createSampleTablesQuery = @"
+psql -U "$USER" -d "$DBNAME" -h "$HOST" << 'EOF'
 -- Create users table
 CREATE TABLE IF NOT EXISTS users (
     id SERIAL PRIMARY KEY,
@@ -116,8 +126,6 @@ SELECT
     END
 FROM generate_series(1, 200) i
 ON CONFLICT DO NOTHING;
-"@
+EOF
 
-& $psqlCommand -U $config.user -d $config.dbname -h $config.host -c $createSampleTablesQuery
-
-Write-Host "✅ Setup complete!" 
+echo "✅ Setup complete!" 

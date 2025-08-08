@@ -1,0 +1,1 @@
+# QueryIQ - AI-powered SQL query optimization assistant 

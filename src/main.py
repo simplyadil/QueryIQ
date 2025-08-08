@@ -1,11 +1,11 @@
 import os
 import json
 import time
+import logging
 from datetime import datetime
 from pathlib import Path
 from src.data.query_collector import QueryCollector
 from src.optimization.query_interceptor import QueryInterceptor
-from src.visualization.powerbi_connector import PowerBIConnector
 
 class QueryIQ:
     def __init__(self, config_path='config.json', performance_threshold=0.3):
@@ -16,39 +16,56 @@ class QueryIQ:
         # Initialize components
         self.collector = QueryCollector(config_path)
         self.interceptor = QueryInterceptor(config_path, performance_threshold=performance_threshold)
-        self.visualizer = PowerBIConnector()
         
         # Create necessary directories
         Path('data/processed').mkdir(parents=True, exist_ok=True)
         Path('data/models').mkdir(parents=True, exist_ok=True)
         Path('logs').mkdir(parents=True, exist_ok=True)
+        
+        # Setup logging
+        self._setup_logging()
+    
+    def _setup_logging(self):
+        """Setup efficient logging configuration."""
+        log_file = Path('logs') / f'queryiq_{datetime.now().strftime("%Y%m%d")}.log'
+        
+        logging.basicConfig(
+            level=logging.INFO,
+            format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+            handlers=[
+                logging.FileHandler(log_file),
+                logging.StreamHandler()
+            ]
+        )
+        self.logger = logging.getLogger(__name__)
     
     def start_monitoring(self, interval=300):  # 5 minutes default
         """Start monitoring query performance."""
         try:
-            print("Starting QueryIQ monitoring...")
-            print(f"Data will be collected every {interval} seconds")
+            self.logger.info("Starting QueryIQ monitoring...")
+            self.logger.info(f"Data will be collected every {interval} seconds")
             
             while True:
                 try:
                     # Collect existing query data
                     self.collector.collect_query_data()
                     
-                    # Update visualizations
-                    self.visualizer.update_visualizations()
+                    # Clean up old data periodically
+                    if datetime.now().hour == 2:  # Clean up at 2 AM
+                        self.collector.cleanup_old_data()
                     
                     # Log status
                     timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-                    print(f"[{timestamp}] QueryIQ monitoring active")
+                    self.logger.info(f"QueryIQ monitoring active at {timestamp}")
                     
                     # Wait for next interval
                     time.sleep(interval)
                     
                 except KeyboardInterrupt:
-                    print("\nStopping QueryIQ monitoring...")
+                    self.logger.info("Stopping QueryIQ monitoring...")
                     break
                 except Exception as e:
-                    print(f"Error during monitoring: {e}")
+                    self.logger.error(f"Error during monitoring: {e}")
                     time.sleep(60)  # Wait a minute before retrying
                     
         finally:
@@ -60,23 +77,13 @@ class QueryIQ:
             # Intercept and analyze query
             result = self.interceptor.execute_query(query)
             
-            # Log analysis
-            timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-            log_entry = {
-                'timestamp': timestamp,
-                'query': query,
-                'predicted_time': result['predicted_time'],
-                'actual_time': result['actual_time'],
-                'suggestions': result['suggestions'],
-                'using_model': result['using_model']
-            }
-            
-            self._log_analysis(log_entry)
+            # Log analysis efficiently
+            self.logger.info(f"Query analyzed: {query[:100]}... - Predicted: {result['predicted_time']:.2f}ms, Actual: {result['actual_time']:.2f}ms")
             
             return result
             
         except Exception as e:
-            print(f"Error analyzing query: {e}")
+            self.logger.error(f"Error analyzing query: {e}")
             raise
     
     def train_model(self, data_path='data/processed/processed_data.parquet'):
@@ -85,51 +92,22 @@ class QueryIQ:
             metrics = self.interceptor.train_model(data_path)
             
             # Log model training results
-            timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-            log_entry = {
-                'timestamp': timestamp,
-                'event': 'model_training',
-                'metrics': metrics
-            }
-            
-            self._log_analysis(log_entry)
+            self.logger.info(f"Model trained successfully with R² score: {metrics['r2']:.4f}")
             
             return metrics
             
         except Exception as e:
-            print(f"Error training model: {e}")
+            self.logger.error(f"Error training model: {e}")
             raise
-    
-    def _log_analysis(self, log_entry):
-        """Log query analysis results."""
-        try:
-            log_file = Path('logs') / f'query_analysis_{datetime.now().strftime("%Y%m%d")}.json'
-            
-            # Load existing logs
-            if log_file.exists():
-                with open(log_file, 'r') as f:
-                    logs = json.load(f)
-            else:
-                logs = []
-            
-            # Add new log entry
-            logs.append(log_entry)
-            
-            # Save updated logs
-            with open(log_file, 'w') as f:
-                json.dump(logs, f, indent=2)
-                
-        except Exception as e:
-            print(f"Error logging analysis: {e}")
     
     def cleanup(self):
         """Clean up resources."""
         try:
             self.collector.close()
             self.interceptor.close()
-            print("QueryIQ cleanup completed")
+            self.logger.info("QueryIQ cleanup completed")
         except Exception as e:
-            print(f"Error during cleanup: {e}")
+            self.logger.error(f"Error during cleanup: {e}")
 
 def main():
     # Initialize QueryIQ

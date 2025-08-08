@@ -1,10 +1,10 @@
-import psycopg2
 import json
 from datetime import datetime
 from ..features.extraction import extract_features
 from ..models.training import train_model
 from .optimizer import QueryOptimizer
 from ..data.query_collector import QueryCollector
+from ..data.connection_manager import DatabaseConnectionManager
 
 class QueryInterceptor:
     def __init__(self, config_path='config.json', performance_threshold=0.3):
@@ -15,19 +15,7 @@ class QueryInterceptor:
         # Initialize components
         self.collector = QueryCollector(config_path)
         self.optimizer = QueryOptimizer(performance_threshold=performance_threshold)
-        
-        # Initialize connection
-        self.conn = None
-        self.connect()
-    
-    def connect(self):
-        """Establish database connection."""
-        try:
-            self.conn = psycopg2.connect(**self.config)
-            self.conn.autocommit = True
-        except Exception as e:
-            print(f"Error connecting to database: {e}")
-            raise
+        self.db_manager = DatabaseConnectionManager(config_path)
     
     def intercept_query(self, query):
         """Intercept a query before execution."""
@@ -71,9 +59,10 @@ class QueryInterceptor:
             
             # Execute query and measure time
             start_time = datetime.now()
-            cursor = self.conn.cursor()
-            cursor.execute(query)
-            results = cursor.fetchall()
+            
+            # Execute query using connection manager
+            results = self.db_manager.execute_query(query)
+            
             execution_time = (datetime.now() - start_time).total_seconds() * 1000  # Convert to ms
             
             # Update performance log with actual execution time
@@ -107,9 +96,8 @@ class QueryInterceptor:
             raise
     
     def close(self):
-        """Close database connection."""
-        if self.conn:
-            self.conn.close()
+        """Close database connections."""
+        self.db_manager.close()
         self.collector.close()
 
 def main():
