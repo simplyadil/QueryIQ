@@ -13,6 +13,7 @@ __pycache__/
 .Python
 venv/
 env/
+ENV/
 build/
 develop-eggs/
 dist/
@@ -29,74 +30,45 @@ wheels/
 .installed.cfg
 *.egg
 
-# Virtual Environment
-venv/
-ENV/
-env/
+# Environment variables
+.env
+.env.*
+!.env.example
 
 # Logs
 logs/
 *.log
 
-# Data
-data/raw/*
-data/processed/*
-!data/processed/.gitkeep
-!data/raw/.gitkeep
+# Database
+*.db
+*.sqlite3
 
-# Models
+# Models (ML artifacts)
+models/
 *.pkl
 *.h5
 *.model
+*.joblib
 
-# PowerBI
-*.pbix
-*.pbit
+# Data files
+*.parquet
+*.csv
+!data/.gitkeep
 
 # OS
 .DS_Store
 Thumbs.db
 
-# Data and Models
-data/processed/
-data/models/
-data/visualizations/
-*.parquet
-*.joblib
-*.csv
-!data/raw/query_data.csv
-
-# IDE
-.idea/
-.vscode/
-*.swp
-*.swo
-.DS_Store
-
-# Configuration
-config.json
-.env
-.env.*
-!config.json.template
-
 # Jupyter Notebook
-.ipynb_checkpoints
+.ipynb_checkpoints/
 *.ipynb
 
-# Distribution / packaging
-.Python
-build/
-develop-eggs/
-dist/
-downloads/
-eggs/
-.eggs/
-lib/
-lib64/
-parts/
-sdist/
-var/
-wheels/
-*.egg-info/
-.installed.cfg
-*.egg
+# Pytest
+.pytest_cache/
+.coverage
+htmlcov/
+
+# mypy
+.mypy_cache/
+.dmypy.json
+dmypy.json
