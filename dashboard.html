@@ -1,0 +1,577 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>QueryIQ Performance Dashboard</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/axios/1.2.1/axios.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            color: #333;
+        }
+
+        .dashboard-container {
+            padding: 2rem;
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 3rem;
+            color: white;
+        }
+
+        .header h1 {
+            font-size: 3rem;
+            font-weight: 700;
+            margin-bottom: 0.5rem;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+        }
+
+        .header p {
+            font-size: 1.2rem;
+            opacity: 0.9;
+        }
+
+        .metrics-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 2rem;
+            margin-bottom: 3rem;
+        }
+
+        .metric-card {
+            background: rgba(255, 255, 255, 0.95);
+            padding: 2rem;
+            border-radius: 20px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255,255,255,0.2);
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .metric-card:hover {
+            transform: translateY(-10px);
+            box-shadow: 0 20px 40px rgba(0,0,0,0.15);
+        }
+
+        .metric-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 4px;
+            background: linear-gradient(90deg, #4CAF50, #45a049);
+        }
+
+        .metric-card.warning::before {
+            background: linear-gradient(90deg, #ff9800, #f57c00);
+        }
+
+        .metric-card.danger::before {
+            background: linear-gradient(90deg, #f44336, #d32f2f);
+        }
+
+        .metric-value {
+            font-size: 3rem;
+            font-weight: 700;
+            color: #2c3e50;
+            margin-bottom: 0.5rem;
+        }
+
+        .metric-label {
+            font-size: 1rem;
+            color: #7f8c8d;
+            margin-bottom: 1rem;
+        }
+
+        .metric-change {
+            font-size: 0.9rem;
+            font-weight: 600;
+            padding: 0.3rem 0.8rem;
+            border-radius: 20px;
+            display: inline-block;
+        }
+
+        .metric-change.positive {
+            background: rgba(76, 175, 80, 0.1);
+            color: #4CAF50;
+        }
+
+        .metric-change.negative {
+            background: rgba(244, 67, 54, 0.1);
+            color: #f44336;
+        }
+
+        .chart-container {
+            background: rgba(255, 255, 255, 0.95);
+            padding: 2rem;
+            border-radius: 20px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255,255,255,0.2);
+            margin-bottom: 2rem;
+        }
+
+        .chart-title {
+            font-size: 1.5rem;
+            font-weight: 600;
+            margin-bottom: 1.5rem;
+            color: #2c3e50;
+        }
+
+        .recent-optimizations {
+            background: rgba(255, 255, 255, 0.95);
+            padding: 2rem;
+            border-radius: 20px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255,255,255,0.2);
+        }
+
+        .optimization-item {
+            padding: 1rem;
+            border-left: 4px solid #4CAF50;
+            background: rgba(76, 175, 80, 0.05);
+            margin-bottom: 1rem;
+            border-radius: 0 10px 10px 0;
+        }
+
+        .optimization-query {
+            font-family: 'Monaco', 'Menlo', monospace;
+            background: rgba(0,0,0,0.05);
+            padding: 0.8rem;
+            border-radius: 8px;
+            font-size: 0.85rem;
+            margin: 0.5rem 0;
+            overflow-x: auto;
+        }
+
+        .optimization-improvement {
+            color: #4CAF50;
+            font-weight: 600;
+            font-size: 1.1rem;
+        }
+
+        .refresh-button {
+            position: fixed;
+            bottom: 2rem;
+            right: 2rem;
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+            border: none;
+            padding: 1rem 2rem;
+            border-radius: 50px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.2);
+            transition: all 0.3s ease;
+        }
+
+        .refresh-button:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 15px 35px rgba(0,0,0,0.3);
+        }
+
+        .loading {
+            opacity: 0.6;
+            pointer-events: none;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.7; }
+        }
+
+        .loading .metric-value {
+            animation: pulse 1.5s infinite;
+        }
+    </style>
+</head>
+<body>
+    <div class="dashboard-container">
+        <div class="header">
+            <h1>QueryIQ Dashboard</h1>
+            <p>Real-time SQL Query Optimization Performance</p>
+        </div>
+
+        <div class="metrics-grid" id="metricsGrid">
+            <!-- Metrics will be populated by JavaScript -->
+        </div>
+
+        <div class="chart-container">
+            <h3 class="chart-title">Performance Improvements Over Time</h3>
+            <canvas id="improvementChart" width="400" height="200"></canvas>
+        </div>
+
+        <div class="chart-container">
+            <h3 class="chart-title">Optimization Success Rate</h3>
+            <canvas id="successChart" width="400" height="200"></canvas>
+        </div>
+
+        <div class="recent-optimizations">
+            <h3 class="chart-title">Recent Optimizations</h3>
+            <div id="recentOptimizations">
+                <!-- Recent optimizations will be populated by JavaScript -->
+            </div>
+        </div>
+    </div>
+
+    <button class="refresh-button" onclick="refreshData()">
+        🔄 Refresh Data
+    </button>
+
+    <script>
+        // Configuration
+        const API_BASE = 'http://localhost:8000/api/v1';
+        
+        // Charts
+        let improvementChart, successChart;
+        
+        // Initialize dashboard
+        document.addEventListener('DOMContentLoaded', function() {
+            initializeCharts();
+            loadDashboardData();
+            
+            // Auto-refresh every 30 seconds
+            setInterval(loadDashboardData, 30000);
+        });
+
+        async function loadDashboardData() {
+            try {
+                document.body.classList.add('loading');
+                
+                // Load all data in parallel
+                const [benchmarkData, statsData, recentOptimizations] = await Promise.all([
+                    fetchBenchmarkSummary(),
+                    fetchStats(),
+                    fetchRecentOptimizations()
+                ]);
+                
+                updateMetrics(benchmarkData, statsData);
+                updateCharts(benchmarkData);
+                updateRecentOptimizations(recentOptimizations);
+                
+            } catch (error) {
+                console.error('Error loading dashboard data:', error);
+            } finally {
+                document.body.classList.remove('loading');
+            }
+        }
+
+        async function fetchBenchmarkSummary() {
+            // Mock data - replace with actual API call
+            return {
+                total_benchmarks: 247,
+                successful_benchmarks: 221,
+                avg_improvement_pct: 34.2,
+                total_time_saved_seconds: 1847.3,
+                max_improvement_pct: 67.8,
+                avg_confidence: 0.823,
+                success_rate_pct: 89.5
+            };
+        }
+
+        async function fetchStats() {
+            try {
+                const response = await axios.get(`${API_BASE}/stats/overview`);
+                return response.data;
+            } catch (error) {
+                // Mock data fallback
+                return {
+                    total_queries: 1543,
+                    slow_queries: 189,
+                    total_suggestions: 756,
+                    avg_execution_time_ms: 245.7
+                };
+            }
+        }
+
+        async function fetchRecentOptimizations() {
+            // Mock data - replace with actual API call
+            return [
+                {
+                    id: '1',
+                    query: 'SELECT * FROM users WHERE email = ?',
+                    optimized_query: 'SELECT id, name, email FROM users WHERE email = ?',
+                    improvement_pct: 45.2,
+                    time: '2 minutes ago'
+                },
+                {
+                    id: '2', 
+                    query: 'SELECT u.name, COUNT(*) FROM users u JOIN orders o ON u.id = o.user_id GROUP BY u.name',
+                    optimized_query: 'SELECT u.name, COUNT(o.id) FROM users u INNER JOIN orders o ON u.id = o.user_id GROUP BY u.id, u.name',
+                    improvement_pct: 28.7,
+                    time: '5 minutes ago'
+                },
+                {
+                    id: '3',
+                    query: 'SELECT * FROM products WHERE price > 100 ORDER BY created_at',
+                    optimized_query: 'SELECT id, name, price FROM products WHERE price > 100 ORDER BY created_at LIMIT 1000',
+                    improvement_pct: 52.1,
+                    time: '8 minutes ago'
+                }
+            ];
+        }
+
+        function updateMetrics(benchmarkData, statsData) {
+            const metricsGrid = document.getElementById('metricsGrid');
+            
+            const metrics = [
+                {
+                    value: benchmarkData.total_benchmarks,
+                    label: 'Queries Optimized',
+                    change: '+12 today',
+                    changeType: 'positive'
+                },
+                {
+                    value: `${Math.round(benchmarkData.total_time_saved_seconds / 3600 * 10) / 10}h`,
+                    label: 'Time Saved',
+                    change: `${benchmarkData.total_time_saved_seconds}s total`,
+                    changeType: 'positive'
+                },
+                {
+                    value: `${benchmarkData.success_rate_pct}%`,
+                    label: 'Success Rate',
+                    change: `${benchmarkData.successful_benchmarks}/${benchmarkData.total_benchmarks}`,
+                    changeType: benchmarkData.success_rate_pct > 85 ? 'positive' : 'negative'
+                },
+                {
+                    value: statsData.total_queries,
+                    label: 'Total Queries Analyzed',
+                    change: '+43 today',
+                    changeType: 'positive'
+                },
+                {
+                    value: `${Math.round(benchmarkData.avg_confidence * 100)}%`,
+                    label: 'AI Confidence',
+                    change: 'ML Model Accuracy',
+                    changeType: 'positive'
+                }
+            ];
+
+            metricsGrid.innerHTML = metrics.map(metric => `
+                <div class="metric-card ${metric.changeType === 'negative' ? 'danger' : ''}">
+                    <div class="metric-value">${metric.value}</div>
+                    <div class="metric-label">${metric.label}</div>
+                    <div class="metric-change ${metric.changeType}">${metric.change}</div>
+                </div>
+            `).join('');
+        }
+
+        function initializeCharts() {
+            // Performance Improvements Chart
+            const improvementCtx = document.getElementById('improvementChart').getContext('2d');
+            improvementChart = new Chart(improvementCtx, {
+                type: 'line',
+                data: {
+                    labels: [],
+                    datasets: [{
+                        label: 'Average Improvement %',
+                        data: [],
+                        borderColor: 'rgb(76, 175, 80)',
+                        backgroundColor: 'rgba(76, 175, 80, 0.1)',
+                        borderWidth: 3,
+                        fill: true,
+                        tension: 0.4
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    plugins: {
+                        legend: {
+                            display: false
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            ticks: {
+                                callback: function(value) {
+                                    return value + '%';
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+
+            // Success Rate Chart
+            const successCtx = document.getElementById('successChart').getContext('2d');
+            successChart = new Chart(successCtx, {
+                type: 'doughnut',
+                data: {
+                    labels: ['Successful', 'Failed'],
+                    datasets: [{
+                        data: [89, 11],
+                        backgroundColor: [
+                            'rgba(76, 175, 80, 0.8)',
+                            'rgba(244, 67, 54, 0.8)'
+                        ],
+                        borderWidth: 0
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    plugins: {
+                        legend: {
+                            position: 'bottom',
+                            labels: {
+                                padding: 20,
+                                usePointStyle: true
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        function updateCharts(benchmarkData) {
+            // Update improvement chart with mock time series data
+            const last7Days = Array.from({length: 7}, (_, i) => {
+                const date = new Date();
+                date.setDate(date.getDate() - (6 - i));
+                return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+            });
+            
+            const improvementData = [28.5, 31.2, 29.8, 34.1, 36.7, 33.4, benchmarkData.avg_improvement_pct];
+
+            improvementChart.data.labels = last7Days;
+            improvementChart.data.datasets[0].data = improvementData;
+            improvementChart.update();
+
+            // Update success rate chart
+            const successRate = benchmarkData.success_rate_pct;
+            const failureRate = 100 - successRate;
+            
+            successChart.data.datasets[0].data = [successRate, failureRate];
+            successChart.update();
+        }
+
+        function updateRecentOptimizations(optimizations) {
+            const container = document.getElementById('recentOptimizations');
+            
+            if (!optimizations || optimizations.length === 0) {
+                container.innerHTML = '<p>No recent optimizations available.</p>';
+                return;
+            }
+
+            container.innerHTML = optimizations.map(opt => `
+                <div class="optimization-item">
+                    <div style="display: flex; justify-content: between; align-items: center; margin-bottom: 0.5rem;">
+                        <strong>Query Optimization</strong>
+                        <span style="color: #7f8c8d; font-size: 0.9rem;">${opt.time}</span>
+                    </div>
+                    
+                    <div style="margin: 1rem 0;">
+                        <strong>Original:</strong>
+                        <div class="optimization-query">${truncateQuery(opt.query)}</div>
+                    </div>
+                    
+                    <div style="margin: 1rem 0;">
+                        <strong>Optimized:</strong>
+                        <div class="optimization-query">${truncateQuery(opt.optimized_query)}</div>
+                    </div>
+                    
+                    <div class="optimization-improvement">
+                        🚀 ${opt.improvement_pct}% faster execution
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function truncateQuery(query, maxLength = 100) {
+            if (query.length <= maxLength) return query;
+            return query.substring(0, maxLength) + '...';
+        }
+
+        async function refreshData() {
+            const button = document.querySelector('.refresh-button');
+            const originalText = button.innerHTML;
+            
+            button.innerHTML = '⏳ Refreshing...';
+            button.disabled = true;
+            
+            try {
+                await loadDashboardData();
+            } finally {
+                button.innerHTML = originalText;
+                button.disabled = false;
+            }
+        }
+
+        // Simulate real-time updates
+        function simulateRealTimeUpdates() {
+            setInterval(() => {
+                // Add some randomness to make it feel more realistic
+                if (Math.random() > 0.7) { // 30% chance every interval
+                    // Simulate a new optimization
+                    console.log('🎯 New optimization detected!');
+                    
+                    // You could show a toast notification here
+                    showNotification('New query optimization completed!', 'success');
+                }
+            }, 10000); // Check every 10 seconds
+        }
+
+        function showNotification(message, type = 'info') {
+            // Create notification element
+            const notification = document.createElement('div');
+            notification.style.cssText = `
+                position: fixed;
+                top: 2rem;
+                right: 2rem;
+                background: ${type === 'success' ? '#4CAF50' : '#2196F3'};
+                color: white;
+                padding: 1rem 2rem;
+                border-radius: 10px;
+                box-shadow: 0 10px 25px rgba(0,0,0,0.2);
+                z-index: 1000;
+                transform: translateX(400px);
+                transition: transform 0.3s ease;
+                font-weight: 600;
+            `;
+            notification.textContent = message;
+            
+            document.body.appendChild(notification);
+            
+            // Animate in
+            setTimeout(() => {
+                notification.style.transform = 'translateX(0)';
+            }, 100);
+            
+            // Remove after 4 seconds
+            setTimeout(() => {
+                notification.style.transform = 'translateX(400px)';
+                setTimeout(() => {
+                    document.body.removeChild(notification);
+                }, 300);
+            }, 4000);
+        }
+
+        // Start real-time simulation
+        simulateRealTimeUpdates();
+    </script>
+</body>
+</html>'positive'
+                },
+                {
+                    value: `${benchmarkData.avg_improvement_pct}%`,
+                    label: 'Average Improvement',
+                    change: '+2.3% vs last week',
+                    changeType:

@@ -21,6 +21,9 @@ class Settings(BaseSettings):
     # Query monitoring
     slow_query_threshold_ms: int = 1000  # 1 second
     max_suggestions_per_query: int = 10
+
+    # AI integration (optional, will load from GEMINI_API_KEY in .env if present)
+    gemini_api_key: Optional[str] = None
     
     class Config:
         env_file = ".env"
@@ -28,4 +31,4 @@ class Settings(BaseSettings):
 
 
 # Global settings instance
-settings = Settings() 
+settings = Settings()
